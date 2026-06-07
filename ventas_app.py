@@ -197,8 +197,9 @@ def get_or_create_sheet(gc, sheet_name: str):
 
 
 # ── Prompt para Gemini ─────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Sos un asistente contable para monotributistas argentinos.
-Tu tarea es extraer datos de ventas para emitir facturas válidas ante ARCA.
+SYSTEM_PROMPT = """Sos un asistente contable para monotributistas argentinos, especializado en registrar ventas de forma flexible y tolerante.
+Tu tarea es extraer datos de ventas para emitir facturas válidas ante ARCA, incluso cuando el mensaje es informal, incompleto, abreviado o con errores de tipeo.
+
 Analizá el mensaje (texto, audio transcripto o imagen de ticket/remito) y devolvé ÚNICAMENTE un JSON con esta estructura:
 
 {
@@ -209,19 +210,33 @@ Analizá el mensaje (texto, audio transcripto o imagen de ticket/remito) y devol
   "productos": [
     {
       "descripcion": "nombre del producto",
-      "cantidad": número,
+      "cantidad": número o null,
       "unidad": "kg" | "unidad" | "litro" | "docena" | "atado" | "bolsa" | "otro",
-      "precio_unitario": número
+      "precio_unitario": número o null
     }
   ],
   "observaciones": "cualquier info extra relevante o null"
 }
 
-Reglas:
-- Si el precio total de una línea está dado pero no el unitario, calculá el unitario dividiendo.
-- Si la unidad no se especifica, usá "unidad".
-- Si es una verdulería, los productos típicos son frutas, verduras, etc.
+Reglas de interpretación flexible:
+- Si no se menciona precio, poné null en precio_unitario (NO inventes precios).
+- Si no se menciona cantidad, asumí 1.
+- Si no se menciona unidad, inferila por contexto: frutas/verduras → "kg", huevos → "docena", etc.
+- Si el precio total de una línea está dado pero no el unitario, calculá dividiendo total/cantidad.
+- Interpretá abreviaciones: "tom" → "tomate", "zana" → "zanahoria", "kg" → kilogramo, "u" → unidad, etc.
+- Interpretá precios escritos sin símbolo: "500" → 500, "1.200" → 1200, "1k" → 1000.
+- Si el mensaje es muy vago (ej: "vendí bien hoy"), igualmente creá los productos que puedas inferir y anotá la ambigüedad en observaciones.
+- El tipo de comprobante por defecto para monotributistas es siempre "Factura C".
+- Si no se menciona cliente, asumir "Consumidor Final" con condicion_iva "Consumidor Final".
+- Tolerá errores ortográficos, mayúsculas/minúsculas, mensajes en lunfardo o jerga argentina.
 - Respondé SOLO con el JSON, sin texto adicional, sin markdown, sin backticks.
+
+Ejemplos de mensajes válidos que debés interpretar:
+- "2 tom 3 papa" → 2kg tomate, 3kg papa, sin precio
+- "tomate 500 zana 300" → tomate $500/kg, zanahoria $300/kg, cantidad 1 cada uno
+- "fac a juan 2kg tomate 500 pesos" → Factura C, cliente Juan, 2kg tomate $500/kg
+- "vendí 10 docenas huevo a 1200 y 5kg naranja a 400" → huevo 10 docenas $1200, naranja 5kg $400
+- "mandate 3 lechuga y 2 kg de boni" → lechuga 3 unidades, batata 2kg, sin precio
 """
 
 
@@ -272,13 +287,13 @@ def guardar_en_sheets(ws, datos: dict, nro_comprobante: str, fuente: str):
 
     productos = datos.get("productos", [])
     total_venta = sum(
-        p.get("cantidad", 1) * p.get("precio_unitario", 0)
+        (p.get("cantidad") or 1) * (p.get("precio_unitario") or 0)
         for p in productos
     )
 
     rows = []
     for p in productos:
-        subtotal = p.get("cantidad", 1) * p.get("precio_unitario", 0)
+        subtotal = (p.get("cantidad") or 1) * (p.get("precio_unitario") or 0)
         rows.append([
             fecha,
             hora,
@@ -433,12 +448,13 @@ if datos_procesados:
         productos = datos_procesados.get("productos", [])
         total = 0
         for i, p in enumerate(productos):
-            sub = p.get("cantidad", 0) * p.get("precio_unitario", 0)
+            sub = (p.get("cantidad") or 1) * (p.get("precio_unitario") or 0)
             total += sub
+            precio_str = f"${p.get('precio_unitario'):,.2f}" if p.get("precio_unitario") else "precio a confirmar"
             st.markdown(
                 f'<div class="producto-row">🥬 <b>{p.get("descripcion", "")}</b> — '
-                f'{p.get("cantidad", "")} {p.get("unidad", "")} × '
-                f'${p.get("precio_unitario", 0):,.2f} = <b>${sub:,.2f}</b></div>',
+                f'{p.get("cantidad") or 1} {p.get("unidad", "")} × '
+                f'{precio_str} = <b>${sub:,.2f}</b></div>',
                 unsafe_allow_html=True
             )
         st.markdown(f'<div class="total-box">TOTAL: ${total:,.2f}</div>', unsafe_allow_html=True)
