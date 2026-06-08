@@ -253,7 +253,7 @@ def normalizar_texto(texto: str) -> str:
         texto = texto.replace(k, v)
     return texto
 
-MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
 def llamar_gemini(client, contents, intento=0):
     """Llama a Gemini con fallback automático a modelos alternativos."""
