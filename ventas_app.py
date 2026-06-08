@@ -91,6 +91,8 @@ if "ultimo_guardado" not in st.session_state:
     st.session_state.ultimo_guardado = None
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
+if "tab_activa" not in st.session_state:
+    st.session_state.tab_activa = "venta"
 
 
 # ── Helpers de precios ─────────────────────────────────────────────────────────
@@ -329,6 +331,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Texto", "🎙️ Audio", "📷 Ima
 
 # ── Tab 1: Texto ───────────────────────────────────────────────────────────────
 with tab1:
+    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR TEXTO</div>', unsafe_allow_html=True)
     st.markdown("Escribí la venta como si mandaras un WhatsApp. Informal, incompleto, abreviado — todo vale:")
     st.markdown("> *\"2 tom 3 papa\"* · *\"tomate 500 zana 300\"* · *\"fac a juan 2kg tomate\"* · *\"Vendí 3kg tomate, 1 lechuga, 2 doc huevo\"*")
@@ -345,6 +348,7 @@ with tab1:
 
 # ── Tab 2: Audio ───────────────────────────────────────────────────────────────
 with tab2:
+    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR AUDIO</div>', unsafe_allow_html=True)
     st.markdown("Subí un audio de WhatsApp (.ogg, .mp3, .wav, .m4a).")
     audio_file = st.file_uploader("Seleccioná el audio:", type=["ogg","mp3","wav","m4a","webm"])
@@ -362,6 +366,7 @@ with tab2:
 
 # ── Tab 3: Imagen ──────────────────────────────────────────────────────────────
 with tab3:
+    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR IMAGEN</div>', unsafe_allow_html=True)
     st.markdown("Subí foto de un ticket, remito o pizarra de precios.")
     img_file = st.file_uploader("Seleccioná la imagen:", type=["jpg","jpeg","png","webp"])
@@ -379,6 +384,7 @@ with tab3:
 
 # ── Tab 4: Lista de Precios y Promos ──────────────────────────────────────────
 with tab4:
+    st.session_state.tab_activa = "precios"
     st.markdown('<div class="tag">LISTA DE PRECIOS Y PROMOS</div>', unsafe_allow_html=True)
     st.markdown("El dueño carga los precios acá. Cuando se registra una venta, los precios y promos se aplican automáticamente.")
 
@@ -487,6 +493,7 @@ with tab4:
 
 # ── Tab 5: Consultas Fiscales ──────────────────────────────────────────────────
 with tab5:
+    st.session_state.tab_activa = "fiscal"
     st.markdown('<div class="tag">ASISTENTE FISCAL</div>', unsafe_allow_html=True)
     st.markdown('<div class="alerta-fiscal">⚠️ <b>Recordá siempre:</b> Como monotributista solo podés emitir <b>Factura C</b>. Nunca A ni B.</div>', unsafe_allow_html=True)
 
@@ -529,7 +536,7 @@ with tab5:
 
 # ── Resultado y guardado ───────────────────────────────────────────────────────
 # ── Mensaje de éxito y deshacer ───────────────────────────────────────────────
-if st.session_state.ultimo_guardado:
+if st.session_state.ultimo_guardado and st.session_state.tab_activa == "venta":
     ug = st.session_state.ultimo_guardado
     st.markdown(f'<div class="success-box">✅ Guardado correctamente — {ug["nro_filas"]} producto(s) — Total: ${ug["total"]:,.2f}</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -560,7 +567,7 @@ if st.session_state.ultimo_guardado:
 
 datos_procesados = st.session_state.datos_procesados
 fuente_actual = st.session_state.fuente_actual
-if datos_procesados:
+if datos_procesados and st.session_state.tab_activa == "venta":
     st.markdown("---")
     st.markdown("### 📋 Datos extraídos — revisá y confirmá")
     col1, col2 = st.columns([1, 1])
