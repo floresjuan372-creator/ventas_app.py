@@ -255,20 +255,23 @@ def normalizar_texto(texto: str) -> str:
 
 MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
-def llamar_gemini(client, contents, intento=0):
+def llamar_gemini(client, contents, intento=0, errores=None):
     """Llama a Gemini con fallback automático a modelos alternativos."""
+    if errores is None:
+        errores = []
     if intento >= len(MODELOS):
-        return None, "Se agotaron todos los modelos disponibles. Intentá en unos minutos."
+        detalle = " | ".join(errores)
+        return None, f"Todos los modelos fallaron: {detalle}"
     modelo = MODELOS[intento]
     try:
         r = client.models.generate_content(model=modelo, contents=contents)
         return r, None
     except Exception as e:
         msg = str(e)
-        if "503" in msg or "UNAVAILABLE" in msg or "quota" in msg.lower():
-            # Intentar con el siguiente modelo
-            return llamar_gemini(client, contents, intento + 1)
-        return None, msg
+        errores.append(f"{modelo}: {msg[:80]}")
+        if "503" in msg or "UNAVAILABLE" in msg or "quota" in msg.lower() or "429" in msg or "404" in msg:
+            return llamar_gemini(client, contents, intento + 1, errores)
+        return None, f"{modelo}: {msg}"
 
 def procesar_venta(client, contenido, tipo, perfil=None):
     prompt = build_ventas_prompt(perfil or {})
@@ -283,10 +286,7 @@ def procesar_venta(client, contenido, tipo, perfil=None):
     r, error = llamar_gemini(client, contents)
 
     if error:
-        if "agotaron" in error:
-            st.warning("⏳ Todos los modelos de Gemini están saturados. Esperá unos minutos y volvé a intentar.")
-        else:
-            st.error(f"❌ Error: {error}")
+        st.error(f"❌ Error al llamar a Gemini: {error}")
         return None
 
     try:
