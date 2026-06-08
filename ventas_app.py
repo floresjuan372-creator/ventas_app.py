@@ -1,4 +1,5 @@
 import streamlit as st
+import cohere
 import os
 import json
 import gspread
@@ -48,9 +49,18 @@ div[data-testid="stSidebar"] { background: #12141e !important; border-right: 1px
 def init_gemini():
     api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        st.error("Falta GEMINI_API_KEY en los secrets.")
-        st.stop()
-    return genai.Client(api_key=api_key)
+        return None
+    try:
+        return genai.Client(api_key=api_key)
+    except Exception:
+        return None
+
+@st.cache_resource
+def init_cohere():
+    api_key = st.secrets.get("COHERE_API_KEY") or os.environ.get("COHERE_API_KEY")
+    if not api_key:
+        return None
+    return cohere.ClientV2(api_key=api_key)
 
 @st.cache_resource
 def init_sheets():
@@ -301,15 +311,37 @@ def procesar_venta(client, contenido, tipo, perfil=None):
         return None
 
 def consulta_fiscal(client, pregunta, historial, perfil):
-    try:
-        msgs = [fiscal_system_prompt(perfil)]
-        for m in historial:
-            msgs.append(f"{'Empleado' if m['role']=='user' else 'Asistente'}: {m['text']}")
-        msgs.append(f"Empleado: {pregunta}")
-        r = client.models.generate_content(model="gemini-2.5-flash", contents="\n\n".join(msgs))
-        return r.text
-    except Exception as e:
-        return f"Error: {e}"
+    system = fiscal_system_prompt(perfil)
+    co_client = init_cohere()
+
+    # Intentar con Cohere primero
+    if co_client:
+        try:
+            msgs = [{"role": "system", "content": system}]
+            for m in historial[-6:]:  # últimos 6 mensajes para no exceder contexto
+                role = "user" if m["role"] == "user" else "assistant"
+                msgs.append({"role": role, "content": m["text"]})
+            msgs.append({"role": "user", "content": pregunta})
+            r = co_client.chat(model="command-r-plus", messages=msgs)
+            return r.message.content[0].text
+        except Exception as e:
+            pass  # fallback a Gemini
+
+    # Fallback a Gemini
+    if client:
+        try:
+            msgs = [system]
+            for m in historial[-6:]:
+                msgs.append(f"{'Empleado' if m['role']=='user' else 'Asistente'}: {m['text']}")
+            msgs.append(f"Empleado: {pregunta}")
+            r, error = llamar_gemini(client, "\n\n".join(msgs))
+            if error:
+                return f"Error: {error}"
+            return r.text
+        except Exception as e:
+            return f"Error: {e}"
+
+    return "❌ No hay servicio de IA disponible. Revisá las API keys."
 
 def guardar_en_sheets(ws, datos, nro_comprobante, fuente, perfil):
     ahora = datetime.now()
@@ -340,6 +372,7 @@ def guardar_en_sheets(ws, datos, nro_comprobante, fuente, perfil):
 client = init_gemini()
 gc = init_sheets()
 sheets_ok = gc is not None
+co_client = init_cohere()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
