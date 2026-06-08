@@ -253,16 +253,43 @@ def normalizar_texto(texto: str) -> str:
         texto = texto.replace(k, v)
     return texto
 
+MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+
+def llamar_gemini(client, contents, intento=0):
+    """Llama a Gemini con fallback automático a modelos alternativos."""
+    if intento >= len(MODELOS):
+        return None, "Se agotaron todos los modelos disponibles. Intentá en unos minutos."
+    modelo = MODELOS[intento]
+    try:
+        r = client.models.generate_content(model=modelo, contents=contents)
+        return r, None
+    except Exception as e:
+        msg = str(e)
+        if "503" in msg or "UNAVAILABLE" in msg or "quota" in msg.lower():
+            # Intentar con el siguiente modelo
+            return llamar_gemini(client, contents, intento + 1)
+        return None, msg
+
 def procesar_venta(client, contenido, tipo, perfil=None):
     prompt = build_ventas_prompt(perfil or {})
+    if tipo == "texto":
+        contenido = normalizar_texto(contenido)
+        contents = [prompt, contenido]
+    elif tipo == "audio":
+        contents = [prompt, "Transcribí el audio y extraé los datos.", contenido]
+    elif tipo == "imagen":
+        contents = [prompt, "Analizá la imagen y extraé los datos de venta.", contenido]
+
+    r, error = llamar_gemini(client, contents)
+
+    if error:
+        if "agotaron" in error:
+            st.warning("⏳ Todos los modelos de Gemini están saturados. Esperá unos minutos y volvé a intentar.")
+        else:
+            st.error(f"❌ Error: {error}")
+        return None
+
     try:
-        if tipo == "texto":
-            contenido = normalizar_texto(contenido)
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, contenido])
-        elif tipo == "audio":
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, "Transcribí el audio y extraé los datos.", contenido])
-        elif tipo == "imagen":
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, "Analizá la imagen y extraé los datos de venta.", contenido])
         raw = r.text.strip().replace("```json","").replace("```","").strip()
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -270,13 +297,7 @@ def procesar_venta(client, contenido, tipo, perfil=None):
         st.code(r.text, language="json")
         return None
     except Exception as e:
-        msg = str(e)
-        if "503" in msg or "UNAVAILABLE" in msg:
-            st.warning("⏳ Gemini está con alta demanda ahora. Esperá unos segundos y volvé a intentar.")
-        elif "quota" in msg.lower():
-            st.error("❌ Se agotó la cuota de la API de Gemini por hoy.")
-        else:
-            st.error(f"❌ Error: {msg}")
+        st.error(f"❌ Error inesperado: {e}")
         return None
 
 def consulta_fiscal(client, pregunta, historial, perfil):
