@@ -72,7 +72,11 @@ def get_or_create_sheet(gc, sheet_name):
         ws = sh.sheet1
     except gspread.SpreadsheetNotFound:
         sh = gc.create(sheet_name)
-        sh.share(None, perm_type="anyone", role="writer")
+        owner_email = st.secrets.get("OWNER_EMAIL") or os.environ.get("OWNER_EMAIL")
+        if owner_email:
+            sh.share(owner_email, perm_type="user", role="writer")
+        else:
+            sh.share(None, perm_type="anyone", role="writer")
         ws = sh.sheet1
         ws.append_row(headers)
     if not ws.row_values(1):
