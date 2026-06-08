@@ -294,9 +294,8 @@ def llamar_gemini(client, contents, intento=0, errores=None):
             return llamar_gemini(client, contents, intento + 1, errores)
         return None, f"{modelo}: {msg}"
 
-def procesar_venta(client, contenido, tipo, perfil=None):
+def procesar_venta(client, contenido, tipo, perfil=None, co_client=None):
     prompt = build_ventas_prompt(perfil or {})
-    co_client = init_cohere()
 
     def parsear(raw_text):
         raw = raw_text.strip().replace("```json","").replace("```","").strip()
@@ -338,9 +337,8 @@ def procesar_venta(client, contenido, tipo, perfil=None):
     st.error("❌ No hay servicio de IA disponible. Revisá las API keys en Secrets.")
     return None
 
-def consulta_fiscal(client, pregunta, historial, perfil):
+def consulta_fiscal(client, pregunta, historial, perfil, co_client=None):
     system = fiscal_system_prompt(perfil)
-    co_client = init_cohere()
 
     # Intentar con Cohere primero
     if co_client:
@@ -402,6 +400,14 @@ gc = init_sheets()
 sheets_ok = gc is not None
 co_client = init_cohere()
 
+# Diagnóstico temporal de servicios
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("**🔍 Estado servicios:**")
+    st.markdown(f"Gemini: {'✅' if client else '❌'}")
+    st.markdown(f"Cohere: {'✅' if co_client else '❌'}")
+    st.markdown(f"Sheets: {'✅' if sheets_ok else '❌'}")
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<p style="font-family:Space Mono;color:#00e5a0;font-weight:700;font-size:1.1rem;">🏪 Mi Negocio</p>', unsafe_allow_html=True)
@@ -441,7 +447,7 @@ with tab1:
     if st.button("Procesar →", key="btn_texto"):
         if texto_input.strip():
             with st.spinner("Analizando..."):
-                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil)
+                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "texto"
@@ -461,7 +467,7 @@ with tab2:
                 audio_bytes = audio_file.read()
                 ext = audio_file.name.split(".")[-1].lower()
                 mime = {"ogg":"audio/ogg","mp3":"audio/mpeg","wav":"audio/wav","m4a":"audio/mp4","webm":"audio/webm"}.get(ext,"audio/ogg")
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil)
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "audio"
@@ -479,7 +485,7 @@ with tab3:
                 img_bytes = img_file.read()
                 ext = img_file.name.split(".")[-1].lower()
                 mime = "image/jpeg" if ext in ("jpg","jpeg") else f"image/{ext}"
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil)
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "imagen"
@@ -612,7 +618,7 @@ with tab5:
         with cols[i % 2]:
             if st.button(pq, key=f"pq_{i}"):
                 with st.spinner("Consultando..."):
-                    resp = consulta_fiscal(client, pq, st.session_state.historial_fiscal, st.session_state.perfil)
+                    resp = consulta_fiscal(client, pq, st.session_state.historial_fiscal, st.session_state.perfil, co_client)
                     st.session_state.historial_fiscal.append({"role": "user", "text": pq})
                     st.session_state.historial_fiscal.append({"role": "bot", "text": resp})
 
@@ -625,7 +631,7 @@ with tab5:
     pregunta_libre = st.chat_input("Escribí tu duda fiscal...")
     if pregunta_libre:
         with st.spinner("Consultando..."):
-            resp = consulta_fiscal(client, pregunta_libre, st.session_state.historial_fiscal, st.session_state.perfil)
+            resp = consulta_fiscal(client, pregunta_libre, st.session_state.historial_fiscal, st.session_state.perfil, co_client)
             st.session_state.historial_fiscal.append({"role": "user", "text": pregunta_libre})
             st.session_state.historial_fiscal.append({"role": "bot", "text": resp})
             st.rerun()
