@@ -90,8 +90,11 @@ if "perfil" not in st.session_state:
 if "historial_fiscal" not in st.session_state:
     st.session_state.historial_fiscal = []
 if "lista_precios" not in st.session_state:
-    # Estructura: [{producto, unidad, precio_normal, tiene_promo, tipo_promo, valor_promo, fecha_inicio, fecha_fin}]
     st.session_state.lista_precios = []
+if "datos_procesados" not in st.session_state:
+    st.session_state.datos_procesados = None
+if "fuente_actual" not in st.session_state:
+    st.session_state.fuente_actual = ""
 
 
 # ── Helpers de precios ─────────────────────────────────────────────────────────
@@ -279,8 +282,7 @@ st.markdown('<p class="sub-header">Registrá ventas · Gestioná precios y promo
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Texto", "🎙️ Audio", "📷 Imagen", "💰 Precios y Promos", "🧾 Consultas Fiscales"])
 
-datos_procesados = None
-fuente_actual = ""
+# datos_procesados se persiste en session_state
 
 # ── Tab 1: Texto ───────────────────────────────────────────────────────────────
 with tab1:
@@ -291,10 +293,10 @@ with tab1:
     if st.button("Procesar →", key="btn_texto"):
         if texto_input.strip():
             with st.spinner("Analizando..."):
-                datos_procesados = procesar_venta(client, texto_input.strip(), "texto")
-                if datos_procesados:
-                    datos_procesados["productos"] = enriquecer_con_precios(datos_procesados.get("productos", []))
-                fuente_actual = "texto"
+                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto")
+                if st.session_state.datos_procesados:
+                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
+                st.session_state.fuente_actual = "texto"
         else:
             st.warning("Escribí algo primero.")
 
@@ -310,10 +312,10 @@ with tab2:
                 audio_bytes = audio_file.read()
                 ext = audio_file.name.split(".")[-1].lower()
                 mime = {"ogg":"audio/ogg","mp3":"audio/mpeg","wav":"audio/wav","m4a":"audio/mp4","webm":"audio/webm"}.get(ext,"audio/ogg")
-                datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio")
-                if datos_procesados:
-                    datos_procesados["productos"] = enriquecer_con_precios(datos_procesados.get("productos", []))
-                fuente_actual = "audio"
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio")
+                if st.session_state.datos_procesados:
+                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
+                st.session_state.fuente_actual = "audio"
 
 # ── Tab 3: Imagen ──────────────────────────────────────────────────────────────
 with tab3:
@@ -327,10 +329,10 @@ with tab3:
                 img_bytes = img_file.read()
                 ext = img_file.name.split(".")[-1].lower()
                 mime = "image/jpeg" if ext in ("jpg","jpeg") else f"image/{ext}"
-                datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen")
-                if datos_procesados:
-                    datos_procesados["productos"] = enriquecer_con_precios(datos_procesados.get("productos", []))
-                fuente_actual = "imagen"
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen")
+                if st.session_state.datos_procesados:
+                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
+                st.session_state.fuente_actual = "imagen"
 
 # ── Tab 4: Lista de Precios y Promos ──────────────────────────────────────────
 with tab4:
@@ -483,6 +485,8 @@ with tab5:
 
 
 # ── Resultado y guardado ───────────────────────────────────────────────────────
+datos_procesados = st.session_state.datos_procesados
+fuente_actual = st.session_state.fuente_actual
 if datos_procesados:
     st.markdown("---")
     st.markdown("### 📋 Datos extraídos — revisá y confirmá")
@@ -554,5 +558,7 @@ if datos_procesados:
                     ws = get_or_create_sheet(gc, sheet_name)
                     total_g, n = guardar_en_sheets(ws, datos_procesados, nro_comprobante, fuente_actual, st.session_state.perfil)
                     st.markdown(f'<div class="success-box">✅ Guardado — {n} producto(s) — Total: ${total_g:,.2f}</div>', unsafe_allow_html=True)
+                    st.session_state.datos_procesados = None
+                    st.session_state.fuente_actual = ""
                 except Exception as e:
                     st.markdown(f'<div class="error-box">❌ Error al guardar: {e}</div>', unsafe_allow_html=True)
