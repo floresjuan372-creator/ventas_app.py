@@ -87,6 +87,8 @@ if "datos_procesados" not in st.session_state:
     st.session_state.datos_procesados = None
 if "fuente_actual" not in st.session_state:
     st.session_state.fuente_actual = ""
+if "ultimo_guardado" not in st.session_state:
+    st.session_state.ultimo_guardado = None  # {"nro_filas": n, "total": x, "nro_comprobante": "..."}
 
 
 # ── Helpers de precios ─────────────────────────────────────────────────────────
@@ -477,6 +479,26 @@ with tab5:
 
 
 # ── Resultado y guardado ───────────────────────────────────────────────────────
+# ── Mensaje de éxito y deshacer ───────────────────────────────────────────────
+if st.session_state.ultimo_guardado:
+    ug = st.session_state.ultimo_guardado
+    st.markdown(f'<div class="success-box">✅ Guardado correctamente — {ug["nro_filas"]} producto(s) — Total: ${ug["total"]:,.2f}</div>', unsafe_allow_html=True)
+    if st.button("↩️ Deshacer último guardado"):
+        if sheets_ok:
+            try:
+                ws = get_or_create_sheet(gc)
+                filas_total = len(ws.get_all_values())
+                for _ in range(ug["nro_filas"]):
+                    ws.delete_rows(filas_total)
+                    filas_total -= 1
+                st.session_state.ultimo_guardado = None
+                st.success("↩️ Filas eliminadas. Podés volver a cargar la venta.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al deshacer: {e}")
+        else:
+            st.warning("Google Sheets no configurado.")
+
 datos_procesados = st.session_state.datos_procesados
 fuente_actual = st.session_state.fuente_actual
 if datos_procesados:
@@ -549,8 +571,9 @@ if datos_procesados:
                 try:
                     ws = get_or_create_sheet(gc, sheet_name)
                     total_g, n = guardar_en_sheets(ws, datos_procesados, nro_comprobante, fuente_actual, st.session_state.perfil)
-                    st.markdown(f'<div class="success-box">✅ Guardado — {n} producto(s) — Total: ${total_g:,.2f}</div>', unsafe_allow_html=True)
+                    st.session_state.ultimo_guardado = {"nro_filas": n, "total": total_g, "nro_comprobante": nro_comprobante}
                     st.session_state.datos_procesados = None
                     st.session_state.fuente_actual = ""
+                    st.rerun()
                 except Exception as e:
                     st.markdown(f'<div class="error-box">❌ Error al guardar: {e}</div>', unsafe_allow_html=True)
