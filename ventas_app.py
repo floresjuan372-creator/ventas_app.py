@@ -162,29 +162,39 @@ def enriquecer_con_precios(productos: list) -> list:
 
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
-VENTAS_PROMPT = """Sos un asistente contable para monotributistas argentinos. Extraé datos de ventas de forma flexible.
+def build_ventas_prompt(perfil: dict) -> str:
+    rubro = perfil.get("rubro") or "comercio"
+    return f"""Sos un asistente contable para monotributistas argentinos. Extraé datos de ventas de forma flexible.
+El negocio es una/un {rubro}.
 
 Devolvé ÚNICAMENTE este JSON (sin markdown, sin backticks):
 
-{
+{{
   "tipo_comprobante": "Factura C" | "Ticket" | "Remito" | "Otro",
   "cliente": "nombre o null",
   "cuit_dni": "número o null",
   "condicion_iva": "Consumidor Final" | "Responsable Inscripto" | "Monotributista" | "Exento" | "No especificado",
   "productos": [
-    {"descripcion": "nombre", "cantidad": número o null, "unidad": "kg"|"unidad"|"litro"|"docena"|"atado"|"bolsa"|"otro", "precio_unitario": número o null}
+    {{
+      "descripcion": "nombre",
+      "cantidad": número o null,
+      "unidad": "kg"|"unidad"|"litro"|"docena"|"atado"|"bolsa"|"otro",
+      "precio_unitario": número o null,
+      "fuera_de_rubro": true | false
+    }}
   ],
   "observaciones": "texto o null"
-}
+}}
 
 Reglas:
-- Precio faltante → null (nunca inventes precios, el sistema los completa desde la lista de precios)
+- Precio faltante → null (nunca inventes precios)
 - Cantidad faltante → 1
 - Inferí unidad: frutas/verduras→kg, huevos→docena
 - Tipo comprobante por defecto: Factura C
 - Cliente faltante → null
 - Interpretá abreviaciones, errores, lunfardo, mensajes a las apuradas
 - "tom"→tomate, "zana"→zanahoria, "1k"→1000, "1.200"→1200
+- Para cada producto, evaluá si corresponde al rubro "{rubro}". Si NO corresponde (ej: pollo en una verdulería, cigarrillos en una librería), marcá fuera_de_rubro: true. Si sí corresponde o tenés dudas razonables, marcá false.
 """
 
 def fiscal_system_prompt(perfil):
@@ -193,14 +203,15 @@ Negocio: {perfil.get('nombre_negocio','—')} | CUIT: {perfil.get('cuit','—')}
 Respondé simple, directo, en español rioplatense. Máx 5 oraciones. Los monotributistas SOLO emiten Factura C.
 Si excede tu conocimiento, decilo y recomendá un contador."""
 
-def procesar_venta(client, contenido, tipo):
+def procesar_venta(client, contenido, tipo, perfil=None):
+    prompt = build_ventas_prompt(perfil or {})
     try:
         if tipo == "texto":
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[VENTAS_PROMPT, contenido])
+            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, contenido])
         elif tipo == "audio":
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[VENTAS_PROMPT, "Transcribí el audio y extraé los datos.", contenido])
+            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, "Transcribí el audio y extraé los datos.", contenido])
         elif tipo == "imagen":
-            r = client.models.generate_content(model="gemini-2.5-flash", contents=[VENTAS_PROMPT, "Analizá la imagen y extraé los datos de venta.", contenido])
+            r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, "Analizá la imagen y extraé los datos de venta.", contenido])
         raw = r.text.strip().replace("```json","").replace("```","").strip()
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -289,7 +300,7 @@ with tab1:
     if st.button("Procesar →", key="btn_texto"):
         if texto_input.strip():
             with st.spinner("Analizando..."):
-                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto")
+                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "texto"
@@ -308,7 +319,7 @@ with tab2:
                 audio_bytes = audio_file.read()
                 ext = audio_file.name.split(".")[-1].lower()
                 mime = {"ogg":"audio/ogg","mp3":"audio/mpeg","wav":"audio/wav","m4a":"audio/mp4","webm":"audio/webm"}.get(ext,"audio/ogg")
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio")
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "audio"
@@ -325,7 +336,7 @@ with tab3:
                 img_bytes = img_file.read()
                 ext = img_file.name.split(".")[-1].lower()
                 mime = "image/jpeg" if ext in ("jpg","jpeg") else f"image/{ext}"
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen")
+                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
                 st.session_state.fuente_actual = "imagen"
@@ -537,37 +548,72 @@ if datos_procesados:
 
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("**Productos**")
+        st.markdown("**Productos — editá si hace falta**")
         productos = datos_procesados.get("productos", [])
-        total = 0
-        for p in productos:
-            precio_aplicado = p.get("precio_aplicado") or p.get("precio_unitario") or 0
-            sub = (p.get("cantidad") or 1) * precio_aplicado
-            total += sub
 
-            if p.get("promo_activa"):
-                precio_normal = p.get("precio_normal", 0)
-                st.markdown(
-                    f'<div class="producto-promo">🏷️ <b>{p.get("descripcion","")}</b> — '
-                    f'{p.get("cantidad") or 1} {p.get("unidad","")} × '
-                    f'<span class="precio-normal">${precio_normal:,.0f}</span> '
-                    f'<span class="precio-promo">${precio_aplicado:,.2f}</span> '
-                    f'({p.get("promo_desc","")}) = <b>${sub:,.2f}</b></div>',
-                    unsafe_allow_html=True
-                )
-            elif not precio_aplicado:
-                st.markdown(
-                    f'<div class="producto-sin-precio">⚠️ <b>{p.get("descripcion","")}</b> — '
-                    f'{p.get("cantidad") or 1} {p.get("unidad","")} × precio a confirmar</div>',
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    f'<div class="producto-row">🥬 <b>{p.get("descripcion","")}</b> — '
-                    f'{p.get("cantidad") or 1} {p.get("unidad","")} × ${precio_aplicado:,.2f} = <b>${sub:,.2f}</b></div>',
-                    unsafe_allow_html=True
-                )
+        # Alertas fuera de rubro
+        fuera_rubro = [p for p in productos if p.get("fuera_de_rubro")]
+        if fuera_rubro:
+            nombres = ", ".join(p.get("descripcion","") for p in fuera_rubro)
+            st.markdown(f'<div class="alerta-fiscal">⚠️ Estos productos podrían no corresponder al rubro <b>{st.session_state.perfil.get("rubro","")}</b>: <b>{nombres}</b>. Revisá antes de confirmar.</div>', unsafe_allow_html=True)
 
+        # Edición inline de cada producto
+        to_delete = []
+        for i, p in enumerate(productos):
+            with st.expander(f"{'⚠️' if p.get('fuera_de_rubro') else '🥬'} {p.get('descripcion','Producto')} — click para editar", expanded=p.get("fuera_de_rubro", False)):
+                ec1, ec2, ec3 = st.columns([2, 1, 1])
+                with ec1:
+                    p["descripcion"] = st.text_input("Descripción", value=p.get("descripcion",""), key=f"desc_{i}")
+                with ec2:
+                    p["cantidad"] = st.number_input("Cantidad", value=float(p.get("cantidad") or 1), min_value=0.0, step=0.5, key=f"cant_{i}")
+                with ec3:
+                    unidades = ["kg","unidad","litro","docena","atado","bolsa","otro"]
+                    u_val = p.get("unidad","kg")
+                    p["unidad"] = st.selectbox("Unidad", unidades, index=unidades.index(u_val) if u_val in unidades else 0, key=f"uni_{i}")
+                precio_val = p.get("precio_aplicado") or p.get("precio_unitario") or 0.0
+                nuevo_precio = st.number_input("Precio unitario ($)", value=float(precio_val), min_value=0.0, step=10.0, key=f"precio_{i}")
+                p["precio_unitario"] = nuevo_precio
+                p["precio_aplicado"] = nuevo_precio
+                if st.button("🗑️ Quitar este producto", key=f"del_prod_{i}"):
+                    to_delete.append(i)
+
+        for idx in reversed(to_delete):
+            productos.pop(idx)
+        datos_procesados["productos"] = productos
+        st.session_state.datos_procesados = datos_procesados
+
+        # Agregar producto nuevo
+        st.markdown("---")
+        st.markdown("**➕ Agregar producto**")
+        nc1, nc2, nc3, nc4 = st.columns([2, 1, 1, 1])
+        with nc1:
+            nuevo_desc = st.text_input("Producto", key="nuevo_desc", placeholder="Ej: Naranja")
+        with nc2:
+            nuevo_cant = st.number_input("Cantidad", value=1.0, min_value=0.0, step=0.5, key="nuevo_cant")
+        with nc3:
+            nuevo_uni = st.selectbox("Unidad", ["kg","unidad","litro","docena","atado","bolsa","otro"], key="nuevo_uni")
+        with nc4:
+            nuevo_precio_new = st.number_input("Precio ($)", value=0.0, min_value=0.0, step=10.0, key="nuevo_precio")
+        if st.button("➕ Agregar", key="btn_agregar_prod"):
+            if nuevo_desc.strip():
+                info = buscar_precio(nuevo_desc.strip())
+                nuevo_p = {
+                    "descripcion": nuevo_desc.strip(),
+                    "cantidad": nuevo_cant,
+                    "unidad": nuevo_uni,
+                    "precio_unitario": nuevo_precio_new or (info["precio_aplicado"] if info else 0),
+                    "precio_aplicado": nuevo_precio_new or (info["precio_aplicado"] if info else 0),
+                    "precio_normal": info["precio_normal"] if info else nuevo_precio_new,
+                    "promo_activa": info["promo_activa"] if info else False,
+                    "promo_desc": info["promo_desc"] if info else "",
+                    "fuera_de_rubro": False,
+                }
+                datos_procesados["productos"].append(nuevo_p)
+                st.session_state.datos_procesados = datos_procesados
+                st.rerun()
+
+        # Total
+        total = sum((p.get("cantidad") or 1) * (p.get("precio_aplicado") or 0) for p in productos)
         st.markdown(f'<div class="total-box">TOTAL: ${total:,.2f}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
