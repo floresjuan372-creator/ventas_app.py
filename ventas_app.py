@@ -241,10 +241,23 @@ Negocio: {perfil.get('nombre_negocio','—')} | CUIT: {perfil.get('cuit','—')}
 Respondé simple, directo, en español rioplatense. Máx 5 oraciones. Los monotributistas SOLO emiten Factura C.
 Si excede tu conocimiento, decilo y recomendá un contador."""
 
+def normalizar_texto(texto: str) -> str:
+    """Convierte fracciones y expresiones comunes antes de enviar a Gemini."""
+    reemplazos = {
+        "1/2": "0.5", "1/4": "0.25", "3/4": "0.75",
+        "½": "0.5", "¼": "0.25", "¾": "0.75",
+        "medio ": "0.5 ", "media ": "0.5 ",
+        "un cuarto de ": "0.25 ", "tres cuartos de ": "0.75 ",
+    }
+    for k, v in reemplazos.items():
+        texto = texto.replace(k, v)
+    return texto
+
 def procesar_venta(client, contenido, tipo, perfil=None):
     prompt = build_ventas_prompt(perfil or {})
     try:
         if tipo == "texto":
+            contenido = normalizar_texto(contenido)
             r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, contenido])
         elif tipo == "audio":
             r = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, "Transcribí el audio y extraé los datos.", contenido])
@@ -253,10 +266,17 @@ def procesar_venta(client, contenido, tipo, perfil=None):
         raw = r.text.strip().replace("```json","").replace("```","").strip()
         return json.loads(raw)
     except json.JSONDecodeError:
-        st.error("Gemini no devolvió JSON válido. Intentá de nuevo.")
+        st.warning("⚠️ Gemini no pudo interpretar el texto. Intentá reformular, por ejemplo: 'medio' en vez de '1/2'.")
+        st.code(r.text, language="json")
         return None
     except Exception as e:
-        st.error(f"Error: {e}")
+        msg = str(e)
+        if "503" in msg or "UNAVAILABLE" in msg:
+            st.warning("⏳ Gemini está con alta demanda ahora. Esperá unos segundos y volvé a intentar.")
+        elif "quota" in msg.lower():
+            st.error("❌ Se agotó la cuota de la API de Gemini por hoy.")
+        else:
+            st.error(f"❌ Error: {msg}")
         return None
 
 def consulta_fiscal(client, pregunta, historial, perfil):
