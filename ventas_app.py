@@ -285,30 +285,46 @@ def llamar_gemini(client, contents, intento=0, errores=None):
 
 def procesar_venta(client, contenido, tipo, perfil=None):
     prompt = build_ventas_prompt(perfil or {})
-    if tipo == "texto":
-        contenido = normalizar_texto(contenido)
-        contents = [prompt, contenido]
-    elif tipo == "audio":
-        contents = [prompt, "Transcribí el audio y extraé los datos.", contenido]
-    elif tipo == "imagen":
-        contents = [prompt, "Analizá la imagen y extraé los datos de venta.", contenido]
+    co_client = init_cohere()
 
-    r, error = llamar_gemini(client, contents)
-
-    if error:
-        st.error(f"❌ Error al llamar a Gemini: {error}")
-        return None
-
-    try:
-        raw = r.text.strip().replace("```json","").replace("```","").strip()
+    def parsear(raw_text):
+        raw = raw_text.strip().replace("```json","").replace("```","").strip()
         return json.loads(raw)
-    except json.JSONDecodeError:
-        st.warning("⚠️ Gemini no pudo interpretar el texto. Intentá reformular, por ejemplo: 'medio' en vez de '1/2'.")
-        st.code(r.text, language="json")
-        return None
-    except Exception as e:
-        st.error(f"❌ Error inesperado: {e}")
-        return None
+
+    # Cohere para texto
+    if tipo == "texto" and co_client:
+        try:
+            texto = normalizar_texto(contenido)
+            raw = llamar_cohere(co_client, prompt, texto)
+            return parsear(raw)
+        except json.JSONDecodeError as e:
+            st.warning("⚠️ No pudo interpretar el texto. Intentá reformular.")
+            return None
+        except Exception as e:
+            st.toast(f"Cohere falló ({str(e)[:50]}), intentando con Gemini...")
+
+    # Gemini para audio/imagen o como fallback
+    if client:
+        if tipo == "texto":
+            contenido = normalizar_texto(contenido)
+            contents = [prompt, contenido]
+        elif tipo == "audio":
+            contents = [prompt, "Transcribí el audio y extraé los datos.", contenido]
+        elif tipo == "imagen":
+            contents = [prompt, "Analizá la imagen y extraé los datos de venta.", contenido]
+
+        r, error = llamar_gemini(client, contents)
+        if error:
+            st.error(f"❌ Gemini también falló: {error}")
+            return None
+        try:
+            return parsear(r.text)
+        except json.JSONDecodeError:
+            st.warning("⚠️ No pudo interpretar el texto. Intentá reformular.")
+            return None
+
+    st.error("❌ No hay servicio de IA disponible. Revisá las API keys en Secrets.")
+    return None
 
 def consulta_fiscal(client, pregunta, historial, perfil):
     system = fiscal_system_prompt(perfil)
