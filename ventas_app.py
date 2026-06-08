@@ -143,23 +143,55 @@ def buscar_precio(nombre_producto: str) -> dict | None:
     }
 
 def enriquecer_con_precios(productos: list) -> list:
-    """Completa precios faltantes y aplica promos automáticamente."""
+    """Completa precios faltantes y aplica promos automáticamente.
+    Si el producto está en la lista de precios, SIEMPRE usa ese precio (con promo si aplica).
+    Si no está en la lista, usa el precio que trajo Gemini (o null si no trajo ninguno)."""
     for p in productos:
         info = buscar_precio(p.get("descripcion", ""))
         if info:
+            # Siempre pisamos con el precio de la lista (puede incluir promo)
             p["precio_normal"] = info["precio_normal"]
             p["precio_aplicado"] = info["precio_aplicado"]
+            p["precio_unitario"] = info["precio_aplicado"]
             p["promo_activa"] = info["promo_activa"]
             p["promo_desc"] = info["promo_desc"]
-            if not p.get("precio_unitario"):
-                p["precio_unitario"] = info["precio_aplicado"]
+            if not p.get("unidad") or p.get("unidad") == "otro":
+                p["unidad"] = info["unidad"]
         else:
-            p.setdefault("precio_normal", p.get("precio_unitario"))
-            p.setdefault("precio_aplicado", p.get("precio_unitario"))
-            p.setdefault("promo_activa", False)
-            p.setdefault("promo_desc", "")
+            # No está en la lista — usar lo que trajo Gemini
+            precio_gemini = p.get("precio_unitario")
+            p["precio_normal"] = precio_gemini
+            p["precio_aplicado"] = precio_gemini
+            p["promo_activa"] = False
+            p["promo_desc"] = ""
     return productos
 
+
+def emoji_producto(nombre: str) -> str:
+    n = nombre.lower()
+    mapa = {
+        "banana": "🍌", "manzana": "🍎", "naranja": "🍊", "mandarina": "🍊",
+        "limon": "🍋", "limón": "🍋", "pera": "🍐", "uva": "🍇", "frutilla": "🍓",
+        "sandia": "🍉", "sandía": "🍉", "melon": "🍈", "melón": "🍈",
+        "durazno": "🍑", "ciruela": "🍑", "kiwi": "🥝", "ananá": "🍍",
+        "anana": "🍍", "mango": "🥭", "cereza": "🍒", "pomelo": "🍊",
+        "higo": "🍈", "damasco": "🍑",
+        "tomate": "🍅", "zanahoria": "🥕", "lechuga": "🥬", "espinaca": "🥬",
+        "acelga": "🥬", "repollo": "🥬", "papa": "🥔", "batata": "🍠",
+        "boniato": "🍠", "cebolla": "🧅", "ajo": "🧄", "brocoli": "🥦",
+        "brócoli": "🥦", "coliflor": "🥦", "choclo": "🌽", "maiz": "🌽",
+        "maíz": "🌽", "pimiento": "🫑", "morron": "🫑", "morrón": "🫑",
+        "pepino": "🥒", "zapallo": "🎃", "zucchini": "🥒", "berenjena": "🍆",
+        "apio": "🥬", "puerro": "🧅", "radicheta": "🥬", "rucula": "🥬",
+        "rúcula": "🥬", "albahaca": "🌿", "perejil": "🌿", "cilantro": "🌿",
+        "hinojo": "🌿", "menta": "🌿", "romero": "🌿", "tomillo": "🌿",
+        "huevo": "🥚", "lenteja": "🫘", "garbanzo": "🫘", "poroto": "🫘",
+        "arroz": "🌾", "harina": "🌾", "jugo": "🧃",
+    }
+    for clave, emoji in mapa.items():
+        if clave in n:
+            return emoji
+    return "🛒"
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
 def build_ventas_prompt(perfil: dict) -> str:
@@ -563,23 +595,44 @@ if datos_procesados:
             st.markdown(f'<div class="alerta-fiscal">⚠️ Estos productos podrían no corresponder al rubro <b>{st.session_state.perfil.get("rubro","")}</b>: <b>{nombres}</b>. Revisá antes de confirmar.</div>', unsafe_allow_html=True)
 
         # Edición inline de cada producto
+        # Sincronizar valores editados desde session state antes de renderizar
+        ik = st.session_state.input_key
         to_delete = []
         for i, p in enumerate(productos):
-            with st.expander(f"{'⚠️' if p.get('fuera_de_rubro') else '🥬'} {p.get('descripcion','Producto')} — click para editar", expanded=p.get("fuera_de_rubro", False)):
+            # Leer valores actuales del session state si ya fueron editados
+            desc_key  = f"desc_{ik}_{i}"
+            cant_key  = f"cant_{ik}_{i}"
+            uni_key   = f"uni_{ik}_{i}"
+            price_key = f"precio_{ik}_{i}"
+
+            if desc_key in st.session_state:
+                p["descripcion"] = st.session_state[desc_key]
+            if cant_key in st.session_state:
+                p["cantidad"] = st.session_state[cant_key]
+            if uni_key in st.session_state:
+                p["unidad"] = st.session_state[uni_key]
+            if price_key in st.session_state:
+                p["precio_unitario"] = st.session_state[price_key]
+                p["precio_aplicado"] = st.session_state[price_key]
+
+            icon = "⚠️" if p.get("fuera_de_rubro") else emoji_producto(p.get("descripcion",""))
+            precio_actual = p.get("precio_aplicado") or p.get("precio_unitario") or 0.0
+            cant_actual = float(p.get("cantidad") or 1)
+
+            with st.expander(f"{icon} {p.get('descripcion','Producto')} — {cant_actual} {p.get('unidad','')} × ${precio_actual:,.0f}", expanded=p.get("fuera_de_rubro", False)):
                 ec1, ec2, ec3 = st.columns([2, 1, 1])
                 with ec1:
-                    p["descripcion"] = st.text_input("Descripción", value=p.get("descripcion",""), key=f"desc_{i}")
+                    p["descripcion"] = st.text_input("Descripción", value=p.get("descripcion",""), key=desc_key)
                 with ec2:
-                    p["cantidad"] = st.number_input("Cantidad", value=float(p.get("cantidad") or 1), min_value=0.0, step=0.5, key=f"cant_{i}")
+                    p["cantidad"] = st.number_input("Cantidad", value=cant_actual, min_value=0.0, step=0.5, key=cant_key)
                 with ec3:
                     unidades = ["kg","unidad","litro","docena","atado","bolsa","otro"]
                     u_val = p.get("unidad","kg")
-                    p["unidad"] = st.selectbox("Unidad", unidades, index=unidades.index(u_val) if u_val in unidades else 0, key=f"uni_{i}")
-                precio_val = p.get("precio_aplicado") or p.get("precio_unitario") or 0.0
-                nuevo_precio = st.number_input("Precio unitario ($)", value=float(precio_val), min_value=0.0, step=10.0, key=f"precio_{i}")
+                    p["unidad"] = st.selectbox("Unidad", unidades, index=unidades.index(u_val) if u_val in unidades else 0, key=uni_key)
+                nuevo_precio = st.number_input("Precio unitario ($)", value=float(precio_actual), min_value=0.0, step=10.0, key=price_key)
                 p["precio_unitario"] = nuevo_precio
                 p["precio_aplicado"] = nuevo_precio
-                if st.button("🗑️ Quitar este producto", key=f"del_prod_{i}"):
+                if st.button("🗑️ Quitar este producto", key=f"del_prod_{ik}_{i}"):
                     to_delete.append(i)
 
         for idx in reversed(to_delete):
