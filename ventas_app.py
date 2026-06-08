@@ -194,7 +194,11 @@ Reglas:
 - Cliente faltante → null
 - Interpretá abreviaciones, errores, lunfardo, mensajes a las apuradas
 - "tom"→tomate, "zana"→zanahoria, "1k"→1000, "1.200"→1200
-- Para cada producto, evaluá si corresponde al rubro "{rubro}". Si NO corresponde (ej: pollo en una verdulería, cigarrillos en una librería), marcá fuera_de_rubro: true. Si sí corresponde o tenés dudas razonables, marcá false.
+- Para cada producto, evaluá si corresponde al rubro "{rubro}".
+- En una verdulería corresponden: frutas, verduras, huevos, legumbres, hierbas, condimentos, jugos naturales, productos de granja básicos.
+- NO corresponden en una verdulería: carnes (pollo, vaca, cerdo, pescado), lácteos elaborados, bebidas alcohólicas, cigarrillos, artículos de limpieza, electrodomésticos.
+- Si NO corresponde marcá fuera_de_rubro: true. Si corresponde o hay duda razonable, marcá false.
+- Aplicá la misma lógica para otros rubros según su actividad principal.
 """
 
 def fiscal_system_prompt(perfil):
@@ -496,6 +500,7 @@ with tab5:
 if st.session_state.ultimo_guardado:
     ug = st.session_state.ultimo_guardado
     st.markdown(f'<div class="success-box">✅ Guardado correctamente — {ug["nro_filas"]} producto(s) — Total: ${ug["total"]:,.2f}</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     col_undo, col_nueva = st.columns([1, 1])
     with col_undo:
         if st.button("↩️ Deshacer último guardado"):
