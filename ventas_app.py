@@ -268,7 +268,7 @@ MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 def llamar_cohere(co_client, prompt, texto):
     """Llama a Cohere para procesar texto."""
     r = co_client.chat(
-        model="command-r-plus",
+        model="command-r-08-2024",
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": texto},
@@ -350,7 +350,7 @@ def consulta_fiscal(client, pregunta, historial, perfil):
                 role = "user" if m["role"] == "user" else "assistant"
                 msgs.append({"role": role, "content": m["text"]})
             msgs.append({"role": "user", "content": pregunta})
-            r = co_client.chat(model="command-r-plus", messages=msgs)
+            r = co_client.chat(model="command-r-08-2024", messages=msgs)
             return r.message.content[0].text
         except Exception as e:
             pass  # fallback a Gemini
