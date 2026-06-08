@@ -265,6 +265,17 @@ def normalizar_texto(texto: str) -> str:
 
 MODELOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
+def llamar_cohere(co_client, prompt, texto):
+    """Llama a Cohere para procesar texto."""
+    r = co_client.chat(
+        model="command-r-plus",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": texto},
+        ],
+    )
+    return r.message.content[0].text
+
 def llamar_gemini(client, contents, intento=0, errores=None):
     """Llama a Gemini con fallback automático a modelos alternativos."""
     if errores is None:
