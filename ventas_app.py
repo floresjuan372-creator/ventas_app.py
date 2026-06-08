@@ -88,7 +88,9 @@ if "datos_procesados" not in st.session_state:
 if "fuente_actual" not in st.session_state:
     st.session_state.fuente_actual = ""
 if "ultimo_guardado" not in st.session_state:
-    st.session_state.ultimo_guardado = None  # {"nro_filas": n, "total": x, "nro_comprobante": "..."}
+    st.session_state.ultimo_guardado = None
+if "input_key" not in st.session_state:
+    st.session_state.input_key = 0
 
 
 # ── Helpers de precios ─────────────────────────────────────────────────────────
@@ -283,7 +285,7 @@ with tab1:
     st.markdown('<div class="tag">REGISTRAR VENTA POR TEXTO</div>', unsafe_allow_html=True)
     st.markdown("Escribí la venta como si mandaras un WhatsApp. Informal, incompleto, abreviado — todo vale:")
     st.markdown("> *\"2 tom 3 papa\"* · *\"tomate 500 zana 300\"* · *\"fac a juan 2kg tomate\"* · *\"Vendí 3kg tomate, 1 lechuga, 2 doc huevo\"*")
-    texto_input = st.text_area("Tu mensaje:", height=100, placeholder="Escribí acá...")
+    texto_input = st.text_area("Tu mensaje:", height=100, placeholder="Escribí acá...", key=f"texto_input_{st.session_state.input_key}")
     if st.button("Procesar →", key="btn_texto"):
         if texto_input.strip():
             with st.spinner("Analizando..."):
@@ -505,6 +507,7 @@ if st.session_state.ultimo_guardado:
             st.session_state.ultimo_guardado = None
             st.session_state.datos_procesados = None
             st.session_state.fuente_actual = ""
+            st.session_state.input_key += 1
             st.rerun()
 
 datos_procesados = st.session_state.datos_procesados
