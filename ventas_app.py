@@ -301,7 +301,8 @@ def procesar_venta(client, contenido, tipo, perfil=None):
             st.warning("⚠️ No pudo interpretar el texto. Intentá reformular.")
             return None
         except Exception as e:
-            st.toast(f"Cohere falló ({str(e)[:50]}), intentando con Gemini...")
+            st.error(f"❌ Cohere falló: {e}")
+            return None
 
     # Gemini para audio/imagen o como fallback
     if client:
