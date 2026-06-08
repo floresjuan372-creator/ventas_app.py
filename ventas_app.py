@@ -62,23 +62,15 @@ def init_sheets():
     except Exception:
         return None
 
-def get_or_create_sheet(gc, sheet_name):
+SHEET_ID = "1oPxcn0ucIs1mq6ImIBLp3lFznHxwjQtzhnuEkfEmuIc"
+
+def get_or_create_sheet(gc, sheet_name=None):
     headers = ["Fecha","Hora","Nro_Comprobante","Tipo_Comprobante","Vendedor_CUIT","Vendedor_Nombre",
                "Categoria_Monotributo","Cliente","CUIT_DNI_Cliente","Condicion_IVA_Cliente",
                "Producto","Cantidad","Unidad","Precio_Normal","Precio_Aplicado","Descuento_Pct",
                "Promo_Activa","Subtotal_Linea","Total_Venta","Observaciones","Fuente"]
-    try:
-        sh = gc.open(sheet_name)
-        ws = sh.sheet1
-    except gspread.SpreadsheetNotFound:
-        sh = gc.create(sheet_name)
-        owner_email = st.secrets.get("OWNER_EMAIL") or os.environ.get("OWNER_EMAIL")
-        if owner_email:
-            sh.share(owner_email, perm_type="user", role="writer")
-        else:
-            sh.share(None, perm_type="anyone", role="writer")
-        ws = sh.sheet1
-        ws.append_row(headers)
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.sheet1
     if not ws.row_values(1):
         ws.append_row(headers)
     return ws
