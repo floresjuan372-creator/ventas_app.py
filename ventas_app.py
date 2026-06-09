@@ -342,7 +342,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Texto", "🎙️ Audio", "📷 Ima
 
 # ── Tab 1: Texto ───────────────────────────────────────────────────────────────
 with tab1:
-    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR TEXTO</div>', unsafe_allow_html=True)
     st.markdown("Escribí la venta como si mandaras un WhatsApp:")
     st.markdown("> *\"2 tom 3 papa\"* · *\"4 banana, 2kg cebolla, 1/2 zapallito\"* · *\"fac a juan 2kg tomate 500\"*")
@@ -355,13 +354,13 @@ with tab1:
                     resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
                     st.session_state.datos_procesados = resultado
                     st.session_state.fuente_actual = "texto"
+                    st.session_state.tab_activa = "venta"
         else:
             st.warning("Escribí algo primero.")
 
 
 # ── Tab 2: Audio ───────────────────────────────────────────────────────────────
 with tab2:
-    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR AUDIO</div>', unsafe_allow_html=True)
     st.markdown("Subí un audio de WhatsApp (.ogg, .mp3, .wav, .m4a).")
     audio_file = st.file_uploader("Seleccioná el audio:", type=["ogg","mp3","wav","m4a","webm"])
@@ -377,11 +376,11 @@ with tab2:
                     resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
                     st.session_state.datos_procesados = resultado
                     st.session_state.fuente_actual = "audio"
+                    st.session_state.tab_activa = "venta"
 
 
 # ── Tab 3: Imagen ──────────────────────────────────────────────────────────────
 with tab3:
-    st.session_state.tab_activa = "venta"
     st.markdown('<div class="tag">REGISTRAR VENTA POR IMAGEN</div>', unsafe_allow_html=True)
     st.markdown("Subí foto de un ticket, remito o pizarra de precios.")
     img_file = st.file_uploader("Seleccioná la imagen:", type=["jpg","jpeg","png","webp"])
@@ -397,11 +396,12 @@ with tab3:
                     resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
                     st.session_state.datos_procesados = resultado
                     st.session_state.fuente_actual = "imagen"
+                    st.session_state.tab_activa = "venta"
 
 
 # ── Tab 4: Precios y Promos ────────────────────────────────────────────────────
 with tab4:
-    st.session_state.tab_activa = "precios"
+    st.session_state.tab_activa = "precios"  # OK acá porque no muestra datos
     st.markdown('<div class="tag">LISTA DE PRECIOS Y PROMOS</div>', unsafe_allow_html=True)
     hoy = date.today()
 
@@ -495,7 +495,7 @@ with tab4:
 
 # ── Tab 5: Consultas Fiscales ──────────────────────────────────────────────────
 with tab5:
-    st.session_state.tab_activa = "fiscal"
+    st.session_state.tab_activa = "fiscal"  # OK acá porque no muestra datos
     st.markdown('<div class="tag">ASISTENTE FISCAL</div>', unsafe_allow_html=True)
     st.markdown('<div class="alerta-fiscal">⚠️ <b>Recordá siempre:</b> Como monotributista solo podés emitir <b>Factura C</b>.</div>', unsafe_allow_html=True)
 
