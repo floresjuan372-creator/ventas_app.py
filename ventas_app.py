@@ -306,9 +306,10 @@ def procesar_venta(client, contenido, tipo, perfil=None, co_client=None):
         try:
             texto = normalizar_texto(contenido)
             raw = llamar_cohere(co_client, prompt, texto)
+            st.info(f"🔍 Respuesta de Cohere: {raw[:300]}")
             return parsear(raw)
         except json.JSONDecodeError as e:
-            st.warning("⚠️ No pudo interpretar el texto. Intentá reformular.")
+            st.warning(f"⚠️ JSON inválido. Respuesta: {raw[:300]}")
             return None
         except Exception as e:
             st.error(f"❌ Cohere falló: {e}")
