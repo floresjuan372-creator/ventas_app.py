@@ -306,7 +306,6 @@ def procesar_venta(client, contenido, tipo, perfil=None, co_client=None):
         try:
             texto = normalizar_texto(contenido)
             raw = llamar_cohere(co_client, prompt, texto)
-            st.info(f"🔍 Respuesta de Cohere: {raw[:300]}")
             return parsear(raw)
         except json.JSONDecodeError as e:
             st.warning(f"⚠️ JSON inválido. Respuesta: {raw[:300]}")
@@ -451,7 +450,8 @@ with tab1:
                 st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                st.session_state.fuente_actual = "texto"
+                    st.session_state.fuente_actual = "texto"
+                    st.rerun()
         else:
             st.warning("Escribí algo primero.")
 
@@ -471,7 +471,8 @@ with tab2:
                 st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                st.session_state.fuente_actual = "audio"
+                    st.session_state.fuente_actual = "audio"
+                    st.rerun()
 
 # ── Tab 3: Imagen ──────────────────────────────────────────────────────────────
 with tab3:
@@ -489,7 +490,8 @@ with tab3:
                 st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil, co_client)
                 if st.session_state.datos_procesados:
                     st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                st.session_state.fuente_actual = "imagen"
+                    st.session_state.fuente_actual = "imagen"
+                    st.rerun()
 
 # ── Tab 4: Lista de Precios y Promos ──────────────────────────────────────────
 with tab4:
