@@ -447,11 +447,12 @@ with tab1:
     if st.button("Procesar →", key="btn_texto"):
         if texto_input.strip():
             with st.spinner("Analizando..."):
-                st.session_state.datos_procesados = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil, co_client)
-                if st.session_state.datos_procesados:
-                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                    st.session_state.fuente_actual = "texto"
-                    st.rerun()
+                resultado = procesar_venta(client, texto_input.strip(), "texto", st.session_state.perfil, co_client)
+            if resultado:
+                resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
+                st.session_state.datos_procesados = resultado
+                st.session_state.fuente_actual = "texto"
+                st.rerun()
         else:
             st.warning("Escribí algo primero.")
 
@@ -468,11 +469,12 @@ with tab2:
                 audio_bytes = audio_file.read()
                 ext = audio_file.name.split(".")[-1].lower()
                 mime = {"ogg":"audio/ogg","mp3":"audio/mpeg","wav":"audio/wav","m4a":"audio/mp4","webm":"audio/webm"}.get(ext,"audio/ogg")
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil, co_client)
-                if st.session_state.datos_procesados:
-                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                    st.session_state.fuente_actual = "audio"
-                    st.rerun()
+                resultado = procesar_venta(client, gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime), "audio", st.session_state.perfil, co_client)
+            if resultado:
+                resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
+                st.session_state.datos_procesados = resultado
+                st.session_state.fuente_actual = "audio"
+                st.rerun()
 
 # ── Tab 3: Imagen ──────────────────────────────────────────────────────────────
 with tab3:
@@ -487,11 +489,12 @@ with tab3:
                 img_bytes = img_file.read()
                 ext = img_file.name.split(".")[-1].lower()
                 mime = "image/jpeg" if ext in ("jpg","jpeg") else f"image/{ext}"
-                st.session_state.datos_procesados = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil, co_client)
-                if st.session_state.datos_procesados:
-                    st.session_state.datos_procesados["productos"] = enriquecer_con_precios(st.session_state.datos_procesados.get("productos", []))
-                    st.session_state.fuente_actual = "imagen"
-                    st.rerun()
+                resultado = procesar_venta(client, gtypes.Part.from_bytes(data=img_bytes, mime_type=mime), "imagen", st.session_state.perfil, co_client)
+            if resultado:
+                resultado["productos"] = enriquecer_con_precios(resultado.get("productos", []))
+                st.session_state.datos_procesados = resultado
+                st.session_state.fuente_actual = "imagen"
+                st.rerun()
 
 # ── Tab 4: Lista de Precios y Promos ──────────────────────────────────────────
 with tab4:
