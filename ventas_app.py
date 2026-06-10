@@ -259,6 +259,13 @@ Respondé simple y directo en español rioplatense. Máx 5 oraciones. Los monotr
 
 
 # ── Procesamiento ──────────────────────────────────────────────────────────────
+def procesar_con_gemini(gemini_client, prompt, texto):
+    r = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[prompt, texto],
+    )
+    return r.text
+
 def procesar_con_cohere(co_client, prompt, texto):
     r = co_client.chat(
         model="command-r-08-2024",
@@ -271,23 +278,44 @@ def procesar_con_cohere(co_client, prompt, texto):
 
 def procesar_venta(gemini_client, co_client, contenido, tipo, perfil=None):
     prompt = build_ventas_prompt(perfil or {})
-    if not co_client:
-        st.error("❌ Cohere no está configurado.")
+    texto = normalizar_texto(contenido)
+
+    # Intentar con Gemini primero, Cohere como fallback
+    raw = None
+    if gemini_client:
+        try:
+            raw = procesar_con_gemini(gemini_client, prompt, texto)
+        except Exception:
+            pass
+
+    if raw is None and co_client:
+        try:
+            raw = procesar_con_cohere(co_client, prompt, texto)
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+            return None
+
+    if raw is None:
+        st.error("❌ No hay servicio de IA disponible. Verificá las API keys.")
         return None
+
     try:
-        texto = normalizar_texto(contenido)
-        raw = procesar_con_cohere(co_client, prompt, texto)
-        raw = raw.strip().replace("```json","").replace("```","").strip()
+        raw = raw.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(raw)
     except json.JSONDecodeError:
         st.warning("⚠️ No pudo interpretar el texto. Intentá reformular.")
         return None
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
-        return None
 
 def consulta_fiscal(gemini_client, co_client, pregunta, historial, perfil):
     system = fiscal_system_prompt(perfil)
+    if gemini_client:
+        try:
+            msgs = [system] + [f"{'Empleado' if m['role']=='user' else 'Asistente'}: {m['text']}" for m in historial[-6:]]
+            msgs.append(f"Empleado: {pregunta}")
+            r = gemini_client.models.generate_content(model="gemini-2.5-flash", contents="\n\n".join(msgs))
+            return r.text
+        except Exception:
+            pass
     if co_client:
         try:
             msgs = [{"role": "system", "content": system}]
@@ -296,14 +324,6 @@ def consulta_fiscal(gemini_client, co_client, pregunta, historial, perfil):
             msgs.append({"role": "user", "content": pregunta})
             r = co_client.chat(model="command-r-08-2024", messages=msgs)
             return r.message.content[0].text
-        except Exception:
-            pass
-    if gemini_client:
-        try:
-            msgs = [system] + [f"{'Empleado' if m['role']=='user' else 'Asistente'}: {m['text']}" for m in historial[-6:]]
-            msgs.append(f"Empleado: {pregunta}")
-            r = gemini_client.models.generate_content(model="gemini-2.5-flash", contents="\n\n".join(msgs))
-            return r.text
         except Exception as e:
             return f"Error: {e}"
     return "❌ No hay servicio de IA disponible."
@@ -586,12 +606,58 @@ with st.sidebar:
     sheet_name = st.text_input("Google Sheet", value="Ventas_Verduleria")
     nro_comprobante = st.text_input("Nro. Comprobante", value=f"C-{datetime.now().strftime('%Y%m%d%H%M')}")
     st.markdown(f'<p style="color:{"#00e5a0" if sheets_ok else "#ff4b4b"};font-size:0.82rem;">{"✅ Sheets conectado" if sheets_ok else "❌ Sheets no configurado"}</p>', unsafe_allow_html=True)
-    st.markdown(f'<p style="color:{"#00e5a0" if co_client else "#ff4b4b"};font-size:0.82rem;">{"✅ Cohere conectado" if co_client else "❌ Cohere no configurado"}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="color:{"#00e5a0" if gemini_client else "#ff4b4b"};font-size:0.82rem;">{"✅ Gemini conectado" if gemini_client else "❌ Gemini no configurado"}</p>', unsafe_allow_html=True)
+    if not gemini_client and co_client:
+        st.markdown('<p style="color:#ffb300;font-size:0.75rem;">⚠️ Usando Cohere como respaldo</p>', unsafe_allow_html=True)
 
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 st.markdown('<p class="main-header">🛒 RegistroVentas IA</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Registrá ventas · Gestioná precios y promos · Consultá dudas fiscales</p>', unsafe_allow_html=True)
+
+with st.expander("ℹ️ ¿Cómo funciona esta app?"):
+    st.markdown("""
+**RegistroVentas IA** es una herramienta pensada para comerciantes monotributistas que registran sus ventas a mano, en el apuro del día a día. La app usa Inteligencia Artificial para interpretar el texto tal cual lo escribís —con abreviaturas, errores, sin comas— y convertirlo automáticamente en un registro organizado en tu planilla de Google Sheets.
+
+---
+
+### Pasos para registrar una venta
+
+1. **Configurá tu negocio** en el panel izquierdo (nombre, CUIT, categoría de monotributo, rubro).
+2. **Cargá tu lista de precios** en la pestaña 💰 *Precios y Promos* — la app los recordará entre sesiones.
+3. **Escribí la venta** en la pestaña 📝 *Texto*, exactamente como la anotarías en un cuaderno:
+   - `2 tom 3 papa`
+   - `4 banana, 2kg cebolla, 1/2 zapallito`
+   - `juan 2 palta pagó con 5000`
+   - `medio cajón acelga y una doc huevo`
+4. Presioná **Procesar →** y la IA interpretará tu texto.
+5. **Revisá los datos** extraídos: podés corregir cantidades, precios o eliminar productos.
+6. Presioná **💾 Confirmar y guardar** para registrar la venta en tu Google Sheet.
+
+---
+
+### ¿Qué hace la IA por vos?
+
+| Entrada | Lo que entiende la IA |
+|---|---|
+| `2tom3papa` | 2 kg tomate + 3 kg papa |
+| `palra` | palta (corrige el typo) |
+| `medio cajón acelga` | 0.5 bolsa de acelga |
+| `juan 2 palta pagó con 5000` | Cliente: Juan, producto: palta, observación: pagó $5000 |
+| `1/4 kg lechuga 400` | 0.25 kg lechuga a $400 |
+
+Si cargaste precios previamente, la app los completa sola. Si hay una promo activa, aplica el precio promocional automáticamente.
+
+---
+
+### Consultas fiscales
+En la pestaña 🧾 *Consultas Fiscales* podés hacerle preguntas al asistente sobre tu situación como monotributista: qué comprobante emitir, qué pasa si superás el límite de categoría, cómo facturar a una empresa, etc.
+
+---
+
+### Resultado esperado
+Cada venta confirmada genera una o más filas en tu Google Sheet con: fecha, hora, número de comprobante, datos del cliente, productos, cantidades, precios y total. Desde la app podés **deshacer el último guardado** si cometiste un error.
+    """)
 
 tab1, tab4, tab5 = st.tabs(["📝 Texto", "💰 Precios y Promos", "🧾 Consultas Fiscales"])
 
