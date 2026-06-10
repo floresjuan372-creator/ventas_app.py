@@ -230,7 +230,11 @@ Reglas:
 - Separá items aunque estén pegados o sin comas: "2tom3papa" = 2 tomate + 3 papa.
 - Cantidad en palabras o fracciones → número: "dos"→2, "medio kilo"→0.5, "1/4"→0.25, "una docena"→1 (unidad docena).
 - Si hay un número junto al producto, es cantidad; si hay un número grande y suelto (cientos/miles) suele ser el PRECIO por unidad o el total. Usá el contexto.
-- Unidades por contexto: frutas/verduras→kg, huevos→docena, atado de verdura→atado, cajón→bolsa. Cantidad faltante→1. Precio faltante→null.
+- Unidad: la regla es simple y estricta:
+  * Si dice "kg", "kilo", "kilos", "gramos" → kg.
+  * Si NO menciona unidad de peso → unidad. Siempre. Sin excepción. "3 papas", "2 zapallos", "4 tomates" → unidad. "3 kg papa", "2 kilos zapallo" → kg.
+  * Huevos sin unidad → docena. Atado → atado. Cajón → bolsa.
+  * Cantidad faltante → 1. Precio faltante → null.
 - Datos del cliente: si nombran a alguien ("a juan", "para la María") → cliente. Si hay CUIT/DNI → cuit_dni.
 - Pagos, vueltos o notas ("pagó con 5000", "debe", "fiado") → observaciones, NO inventes productos con eso.
 - Tipo comprobante siempre: Factura C.
@@ -239,16 +243,19 @@ Reglas:
 Ejemplos:
 
 Entrada: 2tom 3papa
-Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"tomate","cantidad":2,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"papa","cantidad":3,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":null}}
+Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"tomate","cantidad":2,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"papa","cantidad":3,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":null}}
+
+Entrada: 2kg tomate 1500 y 3 kilos papa
+Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"tomate","cantidad":2,"unidad":"kg","precio_unitario":1500,"fuera_de_rubro":false}},{{"descripcion":"papa","cantidad":3,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":null}}
 
 Entrada: medio cajon acelga y una doc huevo
 Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"acelga","cantidad":0.5,"unidad":"bolsa","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"huevo","cantidad":1,"unidad":"docena","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":null}}
 
 Entrada: juan 2 palra 1 morron pago con 5000
-Salida: {{"tipo_comprobante":"Factura C","cliente":"Juan","cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"palta","cantidad":2,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"morrón","cantidad":1,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":"Pagó con $5000"}}
+Salida: {{"tipo_comprobante":"Factura C","cliente":"Juan","cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"palta","cantidad":2,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"morrón","cantidad":1,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":"Pagó con $5000"}}
 
-Entrada: 2kg tomate 1500
-Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"tomate","cantidad":2,"unidad":"kg","precio_unitario":1500,"fuera_de_rubro":false}}],"observaciones":null}}
+Entrada: 4 peras 1 manzana 3 kg papa
+Salida: {{"tipo_comprobante":"Factura C","cliente":null,"cuit_dni":null,"condicion_iva":"Consumidor Final","productos":[{{"descripcion":"pera","cantidad":4,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"manzana","cantidad":1,"unidad":"unidad","precio_unitario":null,"fuera_de_rubro":false}},{{"descripcion":"papa","cantidad":3,"unidad":"kg","precio_unitario":null,"fuera_de_rubro":false}}],"observaciones":null}}
 
 Respondé SOLO con el JSON."""
 
