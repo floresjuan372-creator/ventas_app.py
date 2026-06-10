@@ -76,8 +76,8 @@ SHEET_ID = "1oPxcn0ucIs1mq6ImIBLp3lFznHxwjQtzhnuEkfEmuIc"
 def get_sheet(gc):
     headers = ["Fecha","Hora","Nro_Comprobante","Tipo_Comprobante","Vendedor_CUIT","Vendedor_Nombre",
                "Categoria_Monotributo","Cliente","CUIT_DNI_Cliente","Condicion_IVA_Cliente",
-               "Producto","Cantidad","Unidad","Precio_Unitario","Subtotal_Linea","Total_Venta",
-               "Observaciones","Fuente"]
+               "Producto","Cantidad","Unidad","Precio_Normal","Precio_Aplicado","Descuento_Pct",
+               "Promo_Activa","Subtotal_Linea","Total_Venta","Observaciones","Fuente"]
     sh = gc.open_by_key(SHEET_ID)
     ws = sh.sheet1
     if not ws.row_values(1):
@@ -117,6 +117,7 @@ def emoji_producto(nombre):
         "sandia": "🍉", "sandía": "🍉", "melon": "🍈", "melón": "🍈",
         "durazno": "🍑", "ciruela": "🍑", "kiwi": "🥝", "ananá": "🍍",
         "anana": "🍍", "mango": "🥭", "cereza": "🍒", "pomelo": "🍊",
+        "palta": "🥑", "aguacate": "🥑",
         "tomate": "🍅", "zanahoria": "🥕", "lechuga": "🥬", "espinaca": "🥬",
         "acelga": "🥬", "repollo": "🥬", "papa": "🥔", "batata": "🍠",
         "boniato": "🍠", "cebolla": "🧅", "ajo": "🧄", "brocoli": "🥦",
@@ -338,17 +339,29 @@ def consulta_fiscal(gemini_client, co_client, pregunta, historial, perfil):
 def guardar_en_sheets(ws, datos, nro_comprobante, fuente, perfil):
     ahora = datetime.now()
     productos = datos.get("productos", [])
-    total = sum((p.get("cantidad") or 1) * (p.get("precio_unitario") or 0) for p in productos)
+    total = sum(
+        (p.get("cantidad") or 1) * (p.get("precio_aplicado") or p.get("precio_unitario") or 0)
+        for p in productos
+    )
     for p in productos:
-        sub = (p.get("cantidad") or 1) * (p.get("precio_unitario") or 0)
+        cant = p.get("cantidad") or 1
+        precio_normal = p.get("precio_normal") or p.get("precio_unitario") or 0
+        precio_aplicado = p.get("precio_aplicado") or p.get("precio_unitario") or 0
+        promo_activa = p.get("promo_activa", False)
+        descuento_pct = ""
+        if promo_activa and precio_normal and precio_normal != precio_aplicado:
+            descuento_pct = round((1 - precio_aplicado / precio_normal) * 100, 1)
+        sub = cant * precio_aplicado
         ws.append_row([
             ahora.strftime("%d/%m/%Y"), ahora.strftime("%H:%M"),
             nro_comprobante, datos.get("tipo_comprobante",""),
             perfil.get("cuit",""), perfil.get("nombre_negocio",""), perfil.get("categoria",""),
             datos.get("cliente") or "Consumidor Final", datos.get("cuit_dni") or "",
             datos.get("condicion_iva",""),
-            p.get("descripcion",""), p.get("cantidad",""), p.get("unidad",""),
-            p.get("precio_unitario",""), round(sub, 2), round(total, 2),
+            p.get("descripcion",""), cant, p.get("unidad",""),
+            precio_normal, precio_aplicado, descuento_pct,
+            "Sí" if promo_activa else "No",
+            round(sub, 2), round(total, 2),
             datos.get("observaciones") or "", fuente,
         ])
     return total, len(productos)
